@@ -1,0 +1,15 @@
+Act as an expert software engineer specializing in low-level graphics and simulation algorithms.  
+
+Write a complete, single-file "Falling Sand & Water" simulation in HTML5 Canvas and vanilla JavaScript. 
+
+Requirements:
+1. Everything must be in ONE single index.html file (HTML, CSS, and JS combined). No external libraries.
+2. Grid & Resolution: Canvas size 400x400. Internal simulation grid should be 100x100 cells for high performance.
+3. Elements & Interaction: 
+   - Sand (Yellow): Falls down, slides diagonally down-left/right if blocked.
+   - Water (Blue): Falls down, slides diagonally, and flows horizontally left/right if blocked.
+   - Solid Wall (Gray): Immobile barrier.
+4. Logic Rule: You must iterate through the grid from the BOTTOM row up to the top row each frame to prevent particles from teleporting. Randomize whether left or right is checked first for horizontal movement.
+5. Add UI buttons to select the element (Sand, Water, Wall), a clear button, and allow drawing on the canvas with the mouse.
+
+Provide only the full, working code block ready to be saved and opened in a browser.
