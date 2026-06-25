@@ -221,15 +221,15 @@
     <p class="lead">
       The Agency benchmark evaluates whether a language model can act as a capable assistant when
       real tools are available: looking up people, booking rooms, opening tickets, converting currency,
-      and chaining steps together. The current suite has 23 fixed prompts covering
-      scheduling, reasoning chains, cross-currency conversion, efficiency, recovery, and restraint.
+      and chaining steps together. The current suite has 22 fixed prompts covering
+      scheduling, reasoning chains, cross-currency conversion, efficiency, and restraint.
       Every run uses the same MiniCorp sandbox and scoring rules so results are comparable across models.
     </p>
 
     <section class="hero-stats">
       <div class="stat">
         <div class="stat-label">Scenarios</div>
-        <div class="stat-value">23</div>
+        <div class="stat-value">22</div>
       </div>
       <div class="stat">
         <div class="stat-label">Simulated tools</div>
@@ -237,7 +237,7 @@
       </div>
       <div class="stat">
         <div class="stat-label">Skill areas</div>
-        <div class="stat-value">11</div>
+        <div class="stat-value">10</div>
       </div>
       <div class="stat">
         <div class="stat-label">Scoring</div>
@@ -259,7 +259,6 @@
         <span class="pill">Argument accuracy</span>
         <span class="pill">Multi-step chains</span>
         <span class="pill">Reasoning</span>
-        <span class="pill">Error recovery</span>
         <span class="pill">Restraint</span>
         <span class="pill">Focus under distraction</span>
         <span class="pill">Efficiency</span>
@@ -349,14 +348,13 @@
           <tr><th>Area</th><th>Example task</th></tr>
         </thead>
         <tbody>
-          <tr><td>Tool selection (6 scenarios)</td><td>“What department is Alice Chen in?”</td></tr>
+          <tr><td>Tool selection (7 scenarios)</td><td>“What department is Alice Chen in?”</td></tr>
           <tr><td>Single step (8 scenarios)</td><td>Single tool call with correct arguments — no unnecessary steps</td></tr>
-          <tr><td>Scheduling (4 scenarios)</td><td>“Book Room B next Friday 14:00-15:00 UTC”</td></tr>
-          <tr><td>Multi-step (9 scenarios)</td><td>Look up an employee, then open a ticket for them</td></tr>
+          <tr><td>Scheduling (3 scenarios)</td><td>“Book Conference Room B tomorrow 14:00-15:00 UTC”</td></tr>
+          <tr><td>Multi-step (8 scenarios)</td><td>Look up an employee, then open a ticket for them</td></tr>
           <tr><td>Currency (3 scenarios)</td><td>“Convert 500 EUR to USD at the official rate”</td></tr>
-          <tr><td>Restraint (2 scenarios)</td><td>“What&#x27;s the weather in London tomorrow?” — out of scope, no tools</td></tr>
+          <tr><td>Restraint (2 scenarios)</td><td>“What&#x27;s the weather forecast for London tomorrow?” — out of scope, no tools</td></tr>
           <tr><td>Focus (2 scenarios)</td><td>“What team is Alice Chen on?” — ignore the wiki decoy</td></tr>
-          <tr><td>Recovery (1 scenario)</td><td>Room conflict → find a free slot → complete the booking</td></tr>
           <tr><td>Efficiency (2 scenarios)</td><td>One directory search, not six individual lookups</td></tr>
           <tr><td>Precision (2 scenarios)</td><td>“Look up employee E003 and tell me their department.”</td></tr>
           <tr><td>Reasoning (5 scenarios)</td><td>Platform team member vs team manager — different assignees</td></tr>
@@ -366,7 +364,7 @@
 
     <section class="card">
       <h2>Suite overview</h2>
-      <p>The 23 scenarios are grouped below. Prompts and expected outcomes stay fixed between runs.</p>
+      <p>The 22 scenarios are grouped below. Prompts and expected outcomes stay fixed between runs.</p>
       <div class="suite-grid">
       <div class="suite-group">
         <h3>Lookups &amp; directory</h3>
@@ -384,7 +382,7 @@
         <ul>
         <li>Book Conference Room B tomorrow 14:00-15:00 UTC for a standup.</li>
         <li>Book Room A this Friday 09:00-10:00 UTC for sprint planning.</li>
-        <li>Book Room B next Friday 14:00-15:00 UTC for a design review.</li>
+        <li>Is Conference Room B available tomorrow from 14:00 to 15:00 UTC?</li>
         </ul>
       </div>
       <div class="suite-group">
@@ -413,13 +411,6 @@
         <li>What team is Alice Chen on?</li>
         </ul>
       </div>
-      <div class="suite-group">
-        <h3>Recovery</h3>
-        <p>Detect a booking conflict and complete an alternative booking.</p>
-        <ul>
-        <li>Book Conference Room B tomorrow 14:00-15:00 UTC for our retro.</li>
-        </ul>
-      </div>
       </div>
     </section>
 
@@ -429,10 +420,10 @@
         <li>Open a medium-priority ticket titled &#x27;Budget sign-off&#x27; for Bob Martinez&#x27;s manager.</li>
         <li>How much is 100 USD in JPY? Use official MiniCorp rates.</li>
         <li>What&#x27;s the weather forecast for London tomorrow?</li>
-        <li>Book Room B next Friday 14:00-15:00 UTC for a design review.</li>
+        <li>Book Conference Room B tomorrow 14:00-15:00 UTC for a standup.</li>
       </ul>
       <p class="quote" style="margin-top:14px">
-        The same 23 prompts are used every time, with a controlled company dataset and sandbox
+        The same 22 prompts are used every time, with a controlled company dataset and sandbox
         clock, so pass rates reflect genuine agency — not luck or changing conditions.
       </p>
     </section>
@@ -442,7 +433,6 @@
       <ul>
         <li><strong style="color:var(--text)">Pass</strong> — correct action(s), accurate parameters, within step limits, and required answer content where checked</li>
         <li><strong style="color:var(--text)">Fail</strong> — wrong tool, bad arguments, forbidden tools, unnecessary calls, or acting when none was needed</li>
-        <li><strong style="color:var(--text)">Recovery</strong> — detecting a conflict is not enough; the model must complete a successful booking</li>
         <li><strong style="color:var(--text)">Restraint</strong> — out-of-scope requests (e.g. weather) must be declined without calling any tool, even if decoy tools are visible</li>
         <li>Results are grouped by skill area so strengths and weaknesses are easy to compare across models</li>
       </ul>
