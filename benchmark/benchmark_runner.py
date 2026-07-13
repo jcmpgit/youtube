@@ -419,7 +419,7 @@ class BenchmarkRunner:
         Extract code artifacts from successful responses and save as files.
         
         Creates directory structure:
-        benchmark_results/artifacts/{prompt_name}/{file_path}
+        benchmark_results/artifacts/{model_config}/{prompt_name}/{file_path}
         
         Returns a dict with extraction stats.
         """
@@ -438,7 +438,8 @@ class BenchmarkRunner:
                 continue
             
             stats["prompts"] += 1
-            prompt_dir = artifacts_dir / result.prompt_name
+            # Include model config in path to separate artifacts by model
+            prompt_dir = artifacts_dir / result.model_config / result.prompt_name
             prompt_dir.mkdir(parents=True, exist_ok=True)
             
             for file_path, content in prompt_artifacts.items():
