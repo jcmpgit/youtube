@@ -63,15 +63,20 @@ class ReportGenerator:
         all_tokens = []
         all_latencies = []
         all_throughputs = []
+        total_truncated = 0
         
         for result in self.results:
             profile = result["model_config"]
             prompt = result["prompt_name"]
             status = result["status"]
             tps = result.get("tokens_per_second", 0.0)
+            truncated = result.get("truncated", False)
             # Backward compatibility: compute throughput from tokens/duration if not set
             if tps <= 0 and result.get("tokens_generated", 0) > 0 and result.get("duration_seconds", 0) > 0:
                 tps = result["tokens_generated"] / result["duration_seconds"]
+            
+            if truncated:
+                total_truncated += 1
             
             # By profile
             if profile not in by_profile:
@@ -79,6 +84,7 @@ class ReportGenerator:
                     "total": 0,
                     "success": 0,
                     "failed": 0,
+                    "truncated": 0,
                     "durations": [],
                     "tokens": [],
                     "latencies": [],
@@ -93,6 +99,7 @@ class ReportGenerator:
                     "total": 0,
                     "success": 0,
                     "failed": 0,
+                    "truncated": 0,
                     "durations": [],
                     "tokens": [],
                     "throughputs": [],
@@ -103,6 +110,10 @@ class ReportGenerator:
             if status == "success":
                 by_profile[profile]["success"] += 1
                 by_prompt[prompt]["success"] += 1
+                
+                if truncated:
+                    by_profile[profile]["truncated"] += 1
+                    by_prompt[prompt]["truncated"] += 1
                 
                 by_profile[profile]["durations"].append(result["duration_seconds"])
                 by_prompt[prompt]["durations"].append(result["duration_seconds"])
@@ -144,6 +155,7 @@ class ReportGenerator:
         return {
             "by_profile": by_profile,
             "by_prompt": by_prompt,
+            "total_truncated": total_truncated,
             "overall_stats": {
                 "total_tests": len(self.results),
                 "total_success": sum(1 for r in self.results if r["status"] == "success"),
@@ -362,6 +374,7 @@ class ReportGenerator:
         
         # Overall Summary
         stats = analysis["overall_stats"]
+        total_truncated = analysis.get("total_truncated", 0)
         html += f"""
         <section class="section">
             <h2>Overview</h2>
@@ -383,6 +396,10 @@ class ReportGenerator:
                     <div class="stat-value">
                         {stats['total_success'] / stats['total_tests'] * 100:.1f}%
                     </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Truncated</div>
+                    <div class="stat-value warning">{total_truncated}</div>
                 </div>
             </div>
         </section>
@@ -476,6 +493,7 @@ class ReportGenerator:
                 <tr>
                     <th>Profile</th>
                     <th>Success Rate</th>
+                    <th>Truncated</th>
                     <th>Avg Duration</th>
                     <th>Avg Tokens</th>
                     <th>Avg Throughput</th>
@@ -485,6 +503,7 @@ class ReportGenerator:
         
         for profile, data in sorted(analysis["by_profile"].items()):
             success_rate = (data["success"] / data["total"] * 100) if data["total"] > 0 else 0
+            truncated_count = data.get("truncated", 0)
             avg_duration = data["stats"]["duration"]["mean"]
             avg_tokens = data["stats"]["tokens"]["mean"]
             avg_throughput = data["stats"]["throughput"]["mean"]
@@ -499,6 +518,7 @@ class ReportGenerator:
                             {data['success']}/{data['total']} ({success_rate:.0f}%)
                         </span>
                     </td>
+                    <td>{truncated_count}</td>
                     <td>{avg_duration:.2f}s</td>
                     <td>{avg_tokens:.0f}</td>
                     <td>{throughput_display}</td>
@@ -516,6 +536,7 @@ class ReportGenerator:
                 <tr>
                     <th>Prompt</th>
                     <th>Success Rate</th>
+                    <th>Truncated</th>
                     <th>Avg Duration</th>
                     <th>Avg Tokens</th>
                     <th>Avg Throughput</th>
@@ -524,6 +545,7 @@ class ReportGenerator:
         
         for prompt, data in sorted(analysis["by_prompt"].items()):
             success_rate = (data["success"] / data["total"] * 100) if data["total"] > 0 else 0
+            truncated_count = data.get("truncated", 0)
             avg_duration = data["stats"]["duration"]["mean"]
             avg_tokens = data["stats"]["tokens"]["mean"]
             avg_throughput = data["stats"]["throughput"]["mean"]
@@ -537,6 +559,7 @@ class ReportGenerator:
                             {data['success']}/{data['total']} ({success_rate:.0f}%)
                         </span>
                     </td>
+                    <td>{truncated_count}</td>
                     <td>{avg_duration:.2f}s</td>
                     <td>{avg_tokens:.0f}</td>
                     <td>{throughput_display}</td>

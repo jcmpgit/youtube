@@ -25,6 +25,71 @@ import subprocess
 import requests
 from dataclasses import dataclass, asdict
 import statistics
+import re
+
+def extract_artifacts(response_text: str) -> Dict[str, str]:
+    """
+    Extract code blocks from markdown response text and save as files.
+    
+    Parses markdown looking for:
+    - Code blocks with language hints (```html, ```js, etc.)
+    - File path hints in headers (### 1. index.html, ## src/main.js, etc.)
+    
+    Returns a dict mapping file paths to their content.
+    """
+    artifacts = {}
+    lines = response_text.split('\n')
+    
+    current_file = None
+    current_lang = None
+    current_content = []
+    in_code_block = False
+    
+    for i, line in enumerate(lines):
+        # Check for file path hints in headers
+        header_match = re.match(r'^#{1,3}\s*(?:\d+[.)]\s*)?([^\n]+?)(?:\s*[-:]\s*)?$', line)
+        if header_match and not in_code_block:
+            potential_path = header_match.group(1).strip()
+            # Check if it looks like a file path
+            if '.' in potential_path and not potential_path.startswith('#'):
+                # Clean up common patterns
+                potential_path = potential_path.split(' - ')[0].split(': ')[0].strip()
+                if re.match(r'^[\w\-./]+$', potential_path):
+                    current_file = potential_path
+        
+        # Check for code block start/end
+        code_block_match = re.match(r'^```(\w*)$', line)
+        if code_block_match:
+            if not in_code_block:
+                # Starting a code block
+                in_code_block = True
+                current_lang = code_block_match.group(1) or 'txt'
+                current_content = []
+                # If we haven't set a file from a header, try to infer from language
+                if current_file is None:
+                    if current_lang == 'html':
+                        current_file = 'index.html'
+                    elif current_lang == 'javascript' or current_lang == 'js':
+                        current_file = 'script.js'
+                    elif current_lang == 'python' or current_lang == 'py':
+                        current_file = 'main.py'
+                    elif current_lang == 'css':
+                        current_file = 'style.css'
+                    elif current_lang == 'json':
+                        current_file = 'data.json'
+            else:
+                # Ending a code block - save the artifact
+                in_code_block = False
+                if current_file and current_content:
+                    content = '\n'.join(current_content)
+                    artifacts[current_file] = content
+                current_file = None
+                current_lang = None
+                current_content = []
+        elif in_code_block:
+            current_content.append(line)
+    
+    return artifacts
 
 @dataclass
 class BenchmarkResult:
@@ -40,6 +105,7 @@ class BenchmarkResult:
     first_token_latency_ms: Optional[float] = None
     response_text: str = ""
     error_message: Optional[str] = None
+    truncated: bool = False  # True if response was cut off by max_tokens
     
     def to_dict(self):
         return asdict(self)
@@ -112,15 +178,17 @@ class LlamaServerClient:
             return data['content']
         return ""
     
-    def generate(self, prompt: str, max_tokens: int = 4000) -> Dict[str, Any]:
+    def generate(self, prompt: str, max_tokens: int = 65536) -> Dict[str, Any]:
         """
         Generate text using llama-server / LM Studio.
         Handles both OpenAI and llama.cpp response formats,
         both streaming (SSE) and non-streaming responses.
         Returns response with timing metrics.
+        Detects truncation (finish_reason="length") in streaming responses.
         """
         start_time = time.time()
         first_token_time = None
+        truncated = False
         
         try:
             response = requests.post(
@@ -165,6 +233,11 @@ class LlamaServerClient:
                         if delta:
                             full_text += delta
                             token_count += 1
+                        # Check finish_reason for truncation detection
+                        if 'choices' in data and data['choices']:
+                            finish_reason = data['choices'][0].get('finish_reason')
+                            if finish_reason == 'length':
+                                truncated = True
                     except json.JSONDecodeError:
                         pass
             else:
@@ -175,6 +248,11 @@ class LlamaServerClient:
                 try:
                     data = response.json()
                     full_text = self._extract_text(data)
+                    # Check finish_reason in non-streaming response
+                    if 'choices' in data and data['choices']:
+                        finish_reason = data['choices'][0].get('finish_reason')
+                        if finish_reason == 'length':
+                            truncated = True
                 except (json.JSONDecodeError, KeyError):
                     full_text = response.text
             
@@ -190,10 +268,11 @@ class LlamaServerClient:
             
             return {
                 "success": True,
-                "text": full_text[:500] + "..." if len(full_text) > 500 else full_text,
+                "text": full_text,
                 "tokens": token_count,
                 "duration": total_time,
                 "first_token_latency_ms": first_token_time * 1000 if first_token_time else None,
+                "truncated": truncated,
             }
         except requests.Timeout:
             return {"success": False, "error": "Timeout", "duration": time.time() - start_time}
@@ -209,12 +288,14 @@ class BenchmarkRunner:
                  output_dir: str = "benchmark_results",
                  host: str = "localhost",
                  port: int = 8080,
-                 timeout: int = 600):
+                 timeout: int = 600,
+                 max_tokens: int = 65536):
         self.config_parser = ConfigParser(config_path)
         self.prompts_dir = Path(prompts_dir)
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
         self.client = LlamaServerClient(host, port, timeout)
+        self.max_tokens = max_tokens
         self.results: List[BenchmarkResult] = []
     
     def load_prompts(self) -> Dict[str, str]:
@@ -274,7 +355,7 @@ class BenchmarkRunner:
                 start_time = datetime.now().isoformat()
                 gen_start = time.time()
                 
-                response = self.client.generate(ptext)
+                response = self.client.generate(ptext, max_tokens=self.max_tokens)
                 
                 end_time = datetime.now().isoformat()
                 duration = time.time() - gen_start
@@ -282,6 +363,7 @@ class BenchmarkRunner:
                 if response["success"]:
                     tokens = response["tokens"]
                     tps = tokens / duration if duration > 0 else 0.0
+                    truncated = response.get("truncated", False)
                     result = BenchmarkResult(
                         prompt_name=pname,
                         model_config=cfg_profile,
@@ -292,9 +374,11 @@ class BenchmarkRunner:
                         tokens_generated=tokens,
                         tokens_per_second=round(tps, 2),
                         first_token_latency_ms=response["first_token_latency_ms"],
-                        response_text=response["text"][:500] + "..." if len(response["text"]) > 500 else response["text"],
+                        response_text=response["text"],
+                        truncated=truncated,
                     )
-                    print(f"✓ ({tokens} tokens, {duration:.2f}s, {tps:.1f} tok/s)")
+                    trunc_flag = " ⚠ truncated" if truncated else ""
+                    print(f"✓ ({tokens} tokens, {duration:.2f}s, {tps:.1f} tok/s{trunc_flag})")
                 else:
                     result = BenchmarkResult(
                         prompt_name=pname,
@@ -329,6 +413,53 @@ class BenchmarkRunner:
             )
         
         return str(filepath)
+    
+    def save_artifacts(self, results: Optional[List[BenchmarkResult]] = None) -> Dict[str, int]:
+        """
+        Extract code artifacts from successful responses and save as files.
+        
+        Creates directory structure:
+        benchmark_results/artifacts/{prompt_name}/{file_path}
+        
+        Returns a dict with extraction stats.
+        """
+        if results is None:
+            results = self.results
+        
+        artifacts_dir = self.output_dir / "artifacts"
+        stats = {"prompts": 0, "files": 0, "errors": 0}
+        
+        for result in results:
+            if result.status != "success" or not result.response_text:
+                continue
+            
+            prompt_artifacts = extract_artifacts(result.response_text)
+            if not prompt_artifacts:
+                continue
+            
+            stats["prompts"] += 1
+            prompt_dir = artifacts_dir / result.prompt_name
+            prompt_dir.mkdir(parents=True, exist_ok=True)
+            
+            for file_path, content in prompt_artifacts.items():
+                try:
+                    # Sanitize file path to prevent directory traversal
+                    safe_path = Path(file_path).name
+                    if '/' in file_path:
+                        # Create subdirectories if path includes directories
+                        subdir = prompt_dir / str(Path(file_path).parent)
+                        subdir.mkdir(parents=True, exist_ok=True)
+                        out_path = subdir / safe_path
+                    else:
+                        out_path = prompt_dir / safe_path
+                    
+                    out_path.write_text(content)
+                    stats["files"] += 1
+                except Exception as e:
+                    print(f"  ⚠ Failed to save {file_path}: {e}")
+                    stats["errors"] += 1
+        
+        return stats
 
 def main():
     parser = argparse.ArgumentParser(description="Run benchmark suite against llama-server")
@@ -341,6 +472,7 @@ def main():
     parser.add_argument("--host", default="localhost", help="llama-server host")
     parser.add_argument("--port", type=int, default=8080, help="llama-server port")
     parser.add_argument("--timeout", type=int, default=600, help="Timeout per test in seconds (default: 600)")
+    parser.add_argument("--max-tokens", type=int, default=65536, help="Max tokens per response (default: 65536)")
     
     args = parser.parse_args()
     
@@ -351,6 +483,7 @@ def main():
         host=args.host,
         port=args.port,
         timeout=args.timeout,
+        max_tokens=args.max_tokens,
     )
     
     runner.run_benchmark(
@@ -361,6 +494,14 @@ def main():
     
     result_file = runner.save_results()
     print(f"\n✓ Results saved to: {result_file}")
+    
+    # Extract and save code artifacts
+    artifact_stats = runner.save_artifacts()
+    if artifact_stats["files"] > 0:
+        print(f"✓ Extracted {artifact_stats['files']} files from {artifact_stats['prompts']} prompts")
+        print(f"  → benchmark_results/artifacts/")
+    else:
+        print("  (no code artifacts extracted)")
     
     # Print summary
     successful = sum(1 for r in runner.results if r.status == "success")
@@ -378,6 +519,9 @@ def main():
                     if r.status == "success" and r.first_token_latency_ms]
         if latencies:
             print(f"  🎯 Avg first token latency: {statistics.mean(latencies):.1f}ms")
+        truncated_count = sum(1 for r in runner.results if r.truncated)
+        if truncated_count > 0:
+            print(f"  ⚠  Truncated (hit max_tokens): {truncated_count}/{successful}")
 
 if __name__ == "__main__":
     main()
