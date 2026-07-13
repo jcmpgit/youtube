@@ -10,6 +10,13 @@ This repository contains benchmark systems for evaluating language model perform
 
 A complete benchmark system in `benchmark/` that runs AI model inference tests and generates HTML performance reports.
 
+**Features:**
+- Execute prompts against multiple model configurations
+- Collect performance metrics (latency, throughput, token generation)
+- **Auto-extract generated code as runnable files** (HTML, JS, CSS)
+- Generate interactive HTML reports
+- Compare models across test scenarios
+
 ```bash
 # Quick start with LM Studio
 python3 benchmark/benchmark_runner.py --port 1234
@@ -17,6 +24,8 @@ python3 benchmark/benchmark_runner.py --port 1234
 # Generate report from results
 python3 benchmark/report_generator.py benchmark_results/results_*.json
 ```
+
+Extracted artifacts are saved to `benchmark_results/artifacts/{model_config}/{prompt_name}/` for easy viewing and comparison.
 
 See [benchmark docs](docs/README_BENCHMARKS.md) for full details.
 
@@ -36,6 +45,11 @@ benchmark/              # Benchmark runner scripts & config
   ├── model-configs.ini
   └── prompts/
 benchmark_results/      # Raw JSON results (gitignored)
+  └── artifacts/        # Extracted code files by model (gitignored)
+      └── {model_config}/
+          └── {prompt_name}/
+              ├── index.html
+              └── ...
 reports/                # Generated HTML reports (gitignored)
 docs/                   # Documentation
 ```

@@ -193,6 +193,42 @@ The generated report includes:
 - **Performance Metrics**: Duration, tokens, latency statistics
 - **By Model**: Success rate and performance for each model profile
 - **By Prompt**: Success rate and performance for each prompt type
+- **Truncation Detection**: Reports show if responses were truncated due to token limits
+
+### Extracted Artifacts
+
+After each benchmark run, code blocks from model responses are automatically extracted and saved as actual files:
+
+```
+benchmark_results/artifacts/{model_config}/{prompt_name}/
+├── index.html
+├── style.css
+├── script.js
+└── src/
+    ├── main.js
+    └── utils.js
+```
+
+**Features:**
+- Parses markdown code blocks with language hints (```html, ```js, ```css)
+- Extracts file paths from headers (### 1. index.html, ## src/main.js)
+- Infers filenames from code block languages (html→index.html, js→script.js)
+- Creates subdirectories as needed (src/, js/, etc.)
+
+**Viewing extracted code:**
+```bash
+# List all extracted artifacts
+find benchmark_results/artifacts -type f
+
+# Open a specific project
+open benchmark_results/artifacts/gemma4-12b/breakout/index.html
+
+# Compare artifacts from different models
+ls benchmark_results/artifacts/qwen3-8b/breakout/
+ls benchmark_results/artifacts/gemma4-12b/breakout/
+```
+
+**Note:** Running the same model+prompt combo will overwrite existing artifacts (same result). Different models get separate folders, allowing side-by-side comparison.
 
 ## Model Configurations
 
