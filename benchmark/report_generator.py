@@ -59,6 +59,7 @@ class ReportGenerator:
         
         by_profile = {}
         by_prompt = {}
+        prompt_artifacts = {}
         all_durations = []
         all_tokens = []
         all_latencies = []
@@ -106,6 +107,12 @@ class ReportGenerator:
                 }
             
             by_prompt[prompt]["total"] += 1
+            
+            # Track artifact path for this prompt (from any successful result)
+            if status == "success" and prompt not in prompt_artifacts:
+                artifact_dir = Path("benchmark_results/artifacts") / profile / prompt
+                if (artifact_dir / "index.html").exists():
+                    prompt_artifacts[prompt] = str(artifact_dir / "index.html")
             
             if status == "success":
                 by_profile[profile]["success"] += 1
@@ -155,6 +162,7 @@ class ReportGenerator:
         return {
             "by_profile": by_profile,
             "by_prompt": by_prompt,
+            "prompt_artifacts": prompt_artifacts,
             "total_truncated": total_truncated,
             "overall_stats": {
                 "total_tests": len(self.results),
@@ -349,6 +357,17 @@ class ReportGenerator:
         .metric-label {{
             color: var(--muted);
             font-size: 0.875rem;
+        }}
+        
+        .artifact-link {{
+            color: var(--brand-gradient-end);
+            text-decoration: none;
+            transition: color 0.2s;
+        }}
+        
+        .artifact-link:hover {{
+            color: var(--brand-gradient-start);
+            text-decoration: underline;
         }}
         
         .footer {{
@@ -551,9 +570,18 @@ class ReportGenerator:
             avg_throughput = data["stats"]["throughput"]["mean"]
             throughput_display = f"{avg_throughput:.1f} tok/s" if avg_throughput > 0 else "—"
             
+            # Check if artifact exists for this prompt
+            artifact_link = analysis["prompt_artifacts"].get(prompt)
+            if artifact_link:
+                # Make path relative from reports/ to benchmark_results/artifacts/
+                artifact_link = "../" + artifact_link
+                prompt_display = f'<a href="{artifact_link}" class="artifact-link" target="_blank">{prompt}</a>'
+            else:
+                prompt_display = prompt
+            
             html += f"""
                 <tr>
-                    <td><strong>{prompt}</strong></td>
+                    <td><strong>{prompt_display}</strong></td>
                     <td>
                         <span class="badge {'success' if success_rate == 100 else 'warning' if success_rate > 0 else 'error'}">
                             {data['success']}/{data['total']} ({success_rate:.0f}%)

@@ -178,7 +178,7 @@ class LlamaServerClient:
             return data['content']
         return ""
     
-    def generate(self, prompt: str, max_tokens: int = 65536) -> Dict[str, Any]:
+    def generate(self, prompt: str, max_tokens: int = 16000) -> Dict[str, Any]:
         """
         Generate text using llama-server / LM Studio.
         Handles both OpenAI and llama.cpp response formats,
@@ -266,6 +266,19 @@ class LlamaServerClient:
             if not first_token_time and token_count > 0 and total_time > 0:
                 first_token_time = total_time / token_count
             
+            # Detect empty or trivially short responses as failures
+            # A code-generation benchmark should produce substantial output
+            if not full_text.strip() or len(full_text.strip()) < 10:
+                return {
+                    "success": False,
+                    "error": "Empty or trivial response from server",
+                    "text": full_text,
+                    "tokens": token_count,
+                    "duration": total_time,
+                    "first_token_latency_ms": first_token_time * 1000 if first_token_time else None,
+                    "truncated": truncated,
+                }
+            
             return {
                 "success": True,
                 "text": full_text,
@@ -289,7 +302,7 @@ class BenchmarkRunner:
                  host: str = "localhost",
                  port: int = 8080,
                  timeout: int = 600,
-                 max_tokens: int = 65536):
+                 max_tokens: int = 16000):
         self.config_parser = ConfigParser(config_path)
         self.prompts_dir = Path(prompts_dir)
         self.output_dir = Path(output_dir)
@@ -473,7 +486,7 @@ def main():
     parser.add_argument("--host", default="localhost", help="llama-server host")
     parser.add_argument("--port", type=int, default=8080, help="llama-server port")
     parser.add_argument("--timeout", type=int, default=600, help="Timeout per test in seconds (default: 600)")
-    parser.add_argument("--max-tokens", type=int, default=65536, help="Max tokens per response (default: 65536)")
+    parser.add_argument("--max-tokens", type=int, default=16000, help="Max tokens per response (default: 16000)")
     
     args = parser.parse_args()
     
