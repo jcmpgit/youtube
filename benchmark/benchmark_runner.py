@@ -168,6 +168,23 @@ class LlamaServerClient:
         except:
             return False
     
+    def get_model_name(self) -> str:
+        """Query the server for the actual loaded model name"""
+        try:
+            response = requests.get(f"{self.base_url}/v1/models", timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                models = data.get("data", [])
+                if models:
+                    # Return a clean short name from the model ID
+                    model_id = models[0].get("id", "unknown")
+                    # Strip common prefixes for readability
+                    name = model_id.split("/")[-1] if "/" in model_id else model_id
+                    return name
+        except:
+            pass
+        return "unknown-model"
+    
     def _extract_text(self, data: Dict[str, Any]) -> str:
         """Extract text from response JSON, handling both OpenAI and llama.cpp formats."""
         # OpenAI format: {"choices": [{"text": "..."}]}
@@ -353,8 +370,10 @@ class BenchmarkRunner:
         elif all_profiles:
             profiles = self.config_parser.get_profiles()
         else:
-            # Default: just the first profile (one model loaded at a time)
-            profiles = [self.config_parser.get_profiles()[0]]
+            # No profile specified — detect the actual model from the server
+            actual_model = self.client.get_model_name()
+            print(f"  Detected model: {actual_model}")
+            profiles = [actual_model]
         
         if prompt_name:
             prompts = {prompt_name: prompts[prompt_name]}
