@@ -111,8 +111,15 @@ class ReportGenerator:
             # Track artifact path for this prompt (from any successful result)
             if status == "success" and prompt not in prompt_artifacts:
                 artifact_dir = Path("benchmark_results/artifacts") / profile / prompt
-                if (artifact_dir / "index.html").exists():
-                    prompt_artifacts[prompt] = str(artifact_dir / "index.html")
+                if artifact_dir.exists():
+                    # Prefer index.html, then any file
+                    if (artifact_dir / "index.html").exists():
+                        prompt_artifacts[prompt] = str(artifact_dir / "index.html")
+                    else:
+                        for f in artifact_dir.iterdir():
+                            if f.is_file():
+                                prompt_artifacts[prompt] = str(f)
+                                break
             
             if status == "success":
                 by_profile[profile]["success"] += 1
