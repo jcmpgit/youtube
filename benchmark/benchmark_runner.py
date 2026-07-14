@@ -46,8 +46,11 @@ def extract_artifacts(response_text: str) -> Dict[str, str]:
     in_code_block = False
     
     for i, line in enumerate(lines):
+        # Strip any model channel prefixes like <channel|>
+        clean_line = re.sub(r'^<[^>]*>', '', line)
+        
         # Check for file path hints in headers
-        header_match = re.match(r'^#{1,3}\s*(?:\d+[.)]\s*)?([^\n]+?)(?:\s*[-:]\s*)?$', line)
+        header_match = re.match(r'^#{1,3}\s*(?:\d+[.)]\s*)?([^\n]+?)(?:\s*[-:]\s*)?$', clean_line)
         if header_match and not in_code_block:
             potential_path = header_match.group(1).strip()
             # Check if it looks like a file path
@@ -58,7 +61,8 @@ def extract_artifacts(response_text: str) -> Dict[str, str]:
                     current_file = potential_path
         
         # Check for code block start/end
-        code_block_match = re.match(r'^```(\w*)$', line)
+        # Handle model quirks: <channel|>```html, <channel|>```js, etc.
+        code_block_match = re.match(r'^```(\w*)$', clean_line)
         if code_block_match:
             if not in_code_block:
                 # Starting a code block
@@ -87,7 +91,7 @@ def extract_artifacts(response_text: str) -> Dict[str, str]:
                 current_lang = None
                 current_content = []
         elif in_code_block:
-            current_content.append(line)
+            current_content.append(line)  # Keep original content lines as-is
     
     return artifacts
 
@@ -447,8 +451,10 @@ class BenchmarkRunner:
                 continue
             
             prompt_artifacts = extract_artifacts(result.response_text)
+            
+            # If no code blocks found, save the full response as a markdown file
             if not prompt_artifacts:
-                continue
+                prompt_artifacts = {"response.md": result.response_text}
             
             stats["prompts"] += 1
             # Include model config in path to separate artifacts by model
